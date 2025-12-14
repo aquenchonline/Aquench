@@ -74,11 +74,11 @@ st.markdown("""
             margin-bottom: 0.5rem;
             border: 1px solid #D1D9E6;
             position: relative;
-            height: 100%; /* Ensure equal height in grid */
+            height: 100%;
         }
         .task-header {
             font-weight: 700;
-            font-size: 1.1em; /* Slightly smaller for grid */
+            font-size: 1.1em;
             color: #001f3f;
             margin-bottom: 4px;
             line-height: 1.3;
@@ -188,7 +188,7 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Render Card (Now optimized for Grid View)"""
+    """Render Card (Optimized for Grid View)"""
     with st.container():
         # Party Badge Logic
         party_html = ""
@@ -199,14 +199,14 @@ def render_task_card(task, color, collection, role_can_delete=False):
         target_val = smart_format(task['target_qty'])
         ready_val = smart_format(task.get('ready_qty', 0))
         
-        # Extra Specs (Collapsed for Grid)
+        # Extra Specs
         specs_html = ""
         if 'box_type' in task:
             specs_html = f"""<div style="font-size:0.8em; color:#666; margin-top:6px; padding-top:6px; border-top:1px dashed #eee;">
 📦 {task.get('box_type')} | ⬇️ {task.get('bottom_print')}
 </div>"""
 
-        # HTML CARD
+        # HTML CARD (No Indentation!)
         html_code = f"""
 <div class="task-card" style="border-left: 5px solid {color};">
 {party_html}
@@ -229,7 +229,7 @@ def render_task_card(task, color, collection, role_can_delete=False):
 """
         st.markdown(html_code, unsafe_allow_html=True)
         
-        # ACTIONS (Using Expander)
+        # ACTIONS
         with st.expander("Update"):
             with st.form(f"upd_{task['_id']}"):
                 n_ready = st.number_input("Ready", value=float(task.get('ready_qty', 0)), step=1.0)
@@ -271,6 +271,12 @@ def main_app():
 
     with st.sidebar:
         st.title("🏭 Aquench ERP")
+        
+        # --- GLOBAL REFRESH BUTTON ---
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            st.rerun()
+        # -----------------------------
+            
         st.write(f"**{user_name}** ({role})")
         st.write("---")
         
@@ -356,7 +362,6 @@ def main_app():
             current = [t for t in tasks if t['date'] == today]
             future = [t for t in tasks if t['date'] > today]
             
-            # --- 2 COLUMN GRID LAYOUT ---
             if backlog: 
                 st.subheader("🔴 Backlog")
                 cols = st.columns(2)
@@ -364,8 +369,8 @@ def main_app():
                     with cols[i % 2]: render_task_card(t, "#FF4136", tasks_collection, role=="Admin")
 
             st.subheader("🟢 Today")
-            cols = st.columns(2)
             if current:
+                cols = st.columns(2)
                 for i, t in enumerate(current):
                     with cols[i % 2]: render_task_card(t, "#2ECC40", tasks_collection, role=="Admin")
             else:
@@ -435,7 +440,6 @@ def main_app():
             p_today = [t for t in all_pack if t['date'] == today_str]
             p_upcoming = [t for t in all_pack if t['date'] > today_str]
             
-            # --- 2 COLUMN GRID LAYOUT ---
             if p_backlog:
                 st.subheader("🔴 Backlog")
                 cols = st.columns(2)
@@ -443,8 +447,8 @@ def main_app():
                     with cols[i % 2]: render_task_card(t, "#FF4136", packing_collection, role=="Admin")
             
             st.subheader("🟢 Today")
-            cols = st.columns(2)
             if p_today:
+                cols = st.columns(2)
                 for i, t in enumerate(p_today):
                     with cols[i % 2]: render_task_card(t, "#2ECC40", packing_collection, role=="Admin")
             else:
