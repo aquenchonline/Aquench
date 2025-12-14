@@ -11,22 +11,22 @@ st.set_page_config(page_title="Aquench ERP", layout="wide", page_icon="🏭")
 
 st.markdown("""
     <style>
-        /* 1. MAIN BACKGROUND: Light Blue-Grey */
+        /* 1. MAIN BACKGROUND */
         [data-testid="stAppViewContainer"] {
             background-color: #F2F5F9;
         }
         
-        /* 2. SIDEBAR: Pure White with subtle shadow separator */
+        /* 2. SIDEBAR */
         [data-testid="stSidebar"] {
             background-color: #FFFFFF;
             box-shadow: 2px 0 5px rgba(0,0,0,0.05);
         }
-        
-        /* 3. SIDEBAR TEXT & NAVIGATION */
         [data-testid="stSidebar"] * {
             color: #001f3f;
             font-size: 16px;
         }
+        
+        /* 3. NAVIGATION */
         div[role="radiogroup"] > label > div:first-of-type { display: none; }
         div[role="radiogroup"] > label {
             background-color: transparent;
@@ -37,10 +37,10 @@ st.markdown("""
             transition: all 0.3s;
         }
         div[role="radiogroup"] > label:hover {
-            background-color: #E8EEF1 !important; /* Light Hover */
+            background-color: #E8EEF1 !important;
         }
         div[role="radiogroup"] > label[data-selected="true"] {
-            background-color: #FF851B !important; /* Orange Active */
+            background-color: #FF851B !important;
             color: #FFFFFF !important;
             box-shadow: 0 2px 5px rgba(255, 133, 27, 0.3);
         }
@@ -48,7 +48,7 @@ st.markdown("""
             color: #FFFFFF !important;
         }
 
-        /* 4. FORMS: White Boxed Look */
+        /* 4. GENERAL CONTAINERS */
         [data-testid="stForm"] {
             background-color: #FFFFFF;
             padding: 20px;
@@ -56,8 +56,6 @@ st.markdown("""
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             border: 1px solid #E0E0E0;
         }
-
-        /* 5. METRICS: White Boxed Look */
         [data-testid="stMetric"] {
             background-color: #FFFFFF;
             padding: 10px;
@@ -67,18 +65,63 @@ st.markdown("""
             text-align: center;
         }
 
-        /* 6. MOBILE-RESPONSIVE CARD STYLING */
+        /* 5. UNIFIED TASK CARD STYLING */
         .task-card {
             background-color: #FFFFFF;
             padding: 1.2rem;
             border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.08); /* Deeper shadow for pop */
-            margin-bottom: 1rem;
-            border: 1px solid #D1D9E6; /* Distinct border for boxed look */
-            transition: transform 0.2s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            margin-bottom: 0.5rem; /* Reduced margin to stick to expander */
+            border: 1px solid #D1D9E6;
+            position: relative;
         }
-        .task-card:hover {
-            transform: translateY(-2px); /* Subtle lift effect */
+        .task-header {
+            font-weight: 700;
+            font-size: 1.2em;
+            color: #001f3f;
+            margin-bottom: 4px;
+            line-height: 1.3;
+            word-wrap: break-word;
+        }
+        .task-sub {
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 12px;
+        }
+        .task-metrics {
+            display: flex;
+            justify-content: space-between;
+            background-color: #F8F9FA;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid #EEE;
+        }
+        .metric-item {
+            text-align: center;
+            width: 48%;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-value {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #001f3f;
+        }
+        .badge {
+            background: #F4F6F9;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #444;
+            border: 1px solid #eee;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -139,47 +182,62 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Generic Card Renderer - Optimized for Mobile"""
+    """Optimized Unified Card Renderer"""
     with st.container():
-        # Party Name Badge
+        # Party Badge Logic
         party_html = ""
         if 'party_name' in task:
-            party_html = f"<div style='background:#F4F6F9; padding:4px 10px; border-radius:6px; font-size:0.85em; display:inline-block; margin-bottom:10px; font-weight:600; color:#444; border:1px solid #eee;'>🏢 {task.get('party_name', 'Unknown')}</div>"
+            party_html = f"<div class='badge'>🏢 {task.get('party_name', 'Unknown')}</div>"
         
-        # HTML Block (Left Aligned for Markdown safety)
-        # Added word-wrap and line-height for mobile readability
+        # Prepare Data for HTML
+        target_val = smart_format(task['target_qty'])
+        ready_val = smart_format(task.get('ready_qty', 0))
+        
+        # Extra Specs for Packing
+        specs_html = ""
+        if 'box_type' in task:
+            specs_html = f"""
+            <div style="font-size:0.85em; color:#666; margin-top:8px; padding-top:8px; border-top:1px dashed #eee;">
+                📦 {task.get('box_type')} &nbsp;|&nbsp; 🏷️ {task.get('logo_status')} &nbsp;|&nbsp; ⬇️ {task.get('bottom_print')}
+            </div>
+            """
+
+        # UNIFIED HTML CARD
         st.markdown(f"""
 <div class="task-card" style="border-left: 6px solid {color};">
-{party_html}
-<div style="font-weight:700; font-size:1.2em; color:#001f3f; margin-bottom:6px; line-height:1.3; word-wrap:break-word;">{task['item_name']}</div>
-<div style="font-size:0.95em; color:#555; margin-bottom:8px;">📅 <b>{task['date']}</b> | ⚡ Priority: <b>{task['priority']}</b></div>
-<div style="font-size:0.9em; color:#777; font-style:italic; background:#FAFAFA; padding:5px; border-radius:4px;">{task.get('notes', 'No notes')}</div>
+    {party_html}
+    <div class="task-header">{task['item_name']}</div>
+    <div class="task-sub">📅 {task['date']} &nbsp;|&nbsp; ⚡ Priority: <b>{task['priority']}</b></div>
+    <div style="font-size:0.9em; color:#777; font-style:italic;">{task.get('notes', 'No notes')}</div>
+    {specs_html}
+    
+    <div class="task-metrics">
+        <div class="metric-item">
+            <div class="metric-label">Target</div>
+            <div class="metric-value">{target_val}</div>
+        </div>
+        <div style="border-right: 1px solid #DDD;"></div>
+        <div class="metric-item">
+            <div class="metric-label">Ready</div>
+            <div class="metric-value">{ready_val}</div>
+        </div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
         
-        # Packing Specific Details
-        if 'box_type' in task:
-            st.markdown(f"**📦 {task.get('box_type')}** | 🏷️ {task.get('logo_status')} | ⬇️ {task.get('bottom_print')}")
-
-        # Metrics layout
-        c1, c2 = st.columns(2)
-        c1.metric("Target Qty", smart_format(task['target_qty']))
-        c2.metric("Ready Qty", smart_format(task['ready_qty']))
-        
-        # Action Area
-        with st.expander("📝 Update Progress"):
+        # ACTIONS (Hidden by default to save space, but attached to card)
+        with st.expander("📝 Update Status"):
             with st.form(f"upd_{task['_id']}"):
-                n_ready = st.number_input("Ready Qty", value=float(task.get('ready_qty', 0)), step=1.0)
+                n_ready = st.number_input("Ready Quantity", value=float(task.get('ready_qty', 0)), step=1.0)
                 n_stat = st.selectbox("Status", ["Pending", "Complete"], index=0)
                 
-                # Buttons use full container width for easy mobile tapping
-                c_btn1, c_btn2 = st.columns(2)
-                if c_btn1.form_submit_button("💾 Save", use_container_width=True):
+                # Mobile-friendly full width buttons
+                if st.form_submit_button("💾 Save Progress", use_container_width=True):
                     collection.update_one({"_id": task['_id']}, {"$set": {"ready_qty": n_ready, "status": n_stat}})
                     st.rerun()
                 
                 if role_can_delete:
-                    if c_btn2.form_submit_button("🗑 Delete", type="primary", use_container_width=True):
+                    if st.form_submit_button("🗑 Delete Task", type="primary", use_container_width=True):
                         collection.delete_one({"_id": task['_id']})
                         st.rerun()
 
