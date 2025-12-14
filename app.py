@@ -182,7 +182,7 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Optimized Unified Card Renderer (Fixed Indentation)"""
+    """Optimized Unified Card Renderer (Strings Flattened)"""
     with st.container():
         # Party Badge Logic
         party_html = ""
@@ -193,35 +193,32 @@ def render_task_card(task, color, collection, role_can_delete=False):
         target_val = smart_format(task['target_qty'])
         ready_val = smart_format(task.get('ready_qty', 0))
         
-        # Extra Specs for Packing
+        # Extra Specs for Packing (NO INDENTATION IN STRING)
         specs_html = ""
         if 'box_type' in task:
-            specs_html = f"""
-            <div style="font-size:0.85em; color:#666; margin-top:8px; padding-top:8px; border-top:1px dashed #eee;">
-                📦 {task.get('box_type')} &nbsp;|&nbsp; 🏷️ {task.get('logo_status')} &nbsp;|&nbsp; ⬇️ {task.get('bottom_print')}
-            </div>
-            """
+            specs_html = f"""<div style="font-size:0.85em; color:#666; margin-top:8px; padding-top:8px; border-top:1px dashed #eee;">
+📦 {task.get('box_type')} &nbsp;|&nbsp; 🏷️ {task.get('logo_status')} &nbsp;|&nbsp; ⬇️ {task.get('bottom_print')}
+</div>"""
 
-        # UNIFIED HTML CARD - MUST BE LEFT ALIGNED (No indent)
+        # UNIFIED HTML CARD - NO INDENTATION ALLOWED
         html_code = f"""
 <div class="task-card" style="border-left: 6px solid {color};">
-    {party_html}
-    <div class="task-header">{task['item_name']}</div>
-    <div class="task-sub">📅 {task['date']} &nbsp;|&nbsp; ⚡ Priority: <b>{task['priority']}</b></div>
-    <div style="font-size:0.9em; color:#777; font-style:italic;">{task.get('notes', 'No notes')}</div>
-    {specs_html}
-    
-    <div class="task-metrics">
-        <div class="metric-item">
-            <div class="metric-label">Target</div>
-            <div class="metric-value">{target_val}</div>
-        </div>
-        <div style="border-right: 1px solid #DDD;"></div>
-        <div class="metric-item">
-            <div class="metric-label">Ready</div>
-            <div class="metric-value">{ready_val}</div>
-        </div>
-    </div>
+{party_html}
+<div class="task-header">{task['item_name']}</div>
+<div class="task-sub">📅 {task['date']} &nbsp;|&nbsp; ⚡ Priority: <b>{task['priority']}</b></div>
+<div style="font-size:0.9em; color:#777; font-style:italic;">{task.get('notes', 'No notes')}</div>
+{specs_html}
+<div class="task-metrics">
+<div class="metric-item">
+<div class="metric-label">Target</div>
+<div class="metric-value">{target_val}</div>
+</div>
+<div style="border-right: 1px solid #DDD;"></div>
+<div class="metric-item">
+<div class="metric-label">Ready</div>
+<div class="metric-value">{ready_val}</div>
+</div>
+</div>
 </div>
 """
         st.markdown(html_code, unsafe_allow_html=True)
