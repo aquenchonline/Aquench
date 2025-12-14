@@ -6,32 +6,74 @@ import datetime
 from datetime import timedelta
 import plotly.express as px
 
-# --- 1. CONFIGURATION & CSS (AdminUX) ---
+# --- 1. CONFIGURATION & VISUAL STYLING ---
 st.set_page_config(page_title="Aquench ERP", layout="wide", page_icon="🏭")
 
-# Custom CSS for UI Polish
 st.markdown("""
     <style>
-        [data-testid="stSidebar"] { background-color: #FFFFFF; }
-        [data-testid="stSidebar"] * { color: #001f3f; font-size: 16px; }
+        /* 1. MAIN BACKGROUND: Light Blue-Grey */
+        [data-testid="stAppViewContainer"] {
+            background-color: #F2F5F9;
+        }
+        
+        /* 2. SIDEBAR: Pure White with subtle shadow separator */
+        [data-testid="stSidebar"] {
+            background-color: #FFFFFF;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+        
+        /* 3. SIDEBAR TEXT & NAVIGATION */
+        [data-testid="stSidebar"] * {
+            color: #001f3f;
+            font-size: 16px;
+        }
         div[role="radiogroup"] > label > div:first-of-type { display: none; }
         div[role="radiogroup"] > label {
-            background-color: #F0F2F6; padding: 10px; border-radius: 8px;
-            margin-bottom: 5px; border: 1px solid #ddd; transition: all 0.3s;
+            background-color: transparent;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+            transition: all 0.3s;
         }
         div[role="radiogroup"] > label:hover {
-            background-color: #001f3f !important; color: #FFFFFF !important;
+            background-color: #E8EEF1 !important; /* Light Hover */
         }
         div[role="radiogroup"] > label[data-selected="true"] {
-            background-color: #FF851B !important; color: #FFFFFF !important;
-            border-left: 6px solid #001f3f;
+            background-color: #FF851B !important; /* Orange Active */
+            color: #FFFFFF !important;
+            box-shadow: 0 2px 5px rgba(255, 133, 27, 0.3);
         }
-        div[role="radiogroup"] > label[data-selected="true"] * { color: #FFFFFF !important; }
-        
-        /* Card Styling */
+        div[role="radiogroup"] > label[data-selected="true"] * {
+            color: #FFFFFF !important;
+        }
+
+        /* 4. FORMS: White Boxed Look */
+        [data-testid="stForm"] {
+            background-color: #FFFFFF;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #E0E0E0;
+        }
+
+        /* 5. METRICS: White Boxed Look */
+        [data-testid="stMetric"] {
+            background-color: #FFFFFF;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        /* 6. CUSTOM CARD STYLING (For Tasks) */
         .task-card {
-            background-color: white; padding: 15px; border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 12px;
+            background-color: #FFFFFF;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.08); /* Nice float effect */
+            margin-bottom: 15px;
+            border: 1px solid #EAEAEA;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -94,18 +136,17 @@ def smart_format(num):
 def render_task_card(task, color, collection, role_can_delete=False):
     """Generic Card Renderer for Production and Packing"""
     with st.container():
-        # Packing Logic adds Party Name highlight
         party_html = ""
         if 'party_name' in task:
-            party_html = f"<div style='background:#eee; padding:2px 6px; border-radius:4px; font-size:0.8em; display:inline-block; margin-bottom:5px;'>🏢 {task.get('party_name', 'Unknown')}</div>"
+            party_html = f"<div style='background:#F4F6F9; padding:4px 8px; border-radius:4px; font-size:0.85em; display:inline-block; margin-bottom:8px; font-weight:600; color:#444;'>🏢 {task.get('party_name', 'Unknown')}</div>"
         
-        # HTML MUST BE LEFT-ALIGNED (No Indentation) to work
+        # HTML Block (Left Aligned for Markdown safety)
         st.markdown(f"""
-<div class="task-card" style="border-left: 5px solid {color};">
+<div class="task-card" style="border-left: 6px solid {color};">
 {party_html}
-<div style="font-weight:bold; font-size:1.1em; color:#001f3f;">{task['item_name']}</div>
-<div style="font-size:0.85em; color:#666;">📅 {task['date']} | ⚡ P{task['priority']}</div>
-<div style="font-size:0.8em; color:#888; margin-top:5px;">{task.get('notes', '')}</div>
+<div style="font-weight:700; font-size:1.15em; color:#001f3f; margin-bottom:4px;">{task['item_name']}</div>
+<div style="font-size:0.9em; color:#666; margin-bottom:4px;">📅 {task['date']} | ⚡ P{task['priority']}</div>
+<div style="font-size:0.85em; color:#888; font-style:italic;">{task.get('notes', '')}</div>
 </div>
 """, unsafe_allow_html=True)
         
@@ -136,6 +177,7 @@ def render_task_card(task, color, collection, role_can_delete=False):
 def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True) # Spacer
         st.title("🔐 Aquench ERP")
         st.markdown("##### System Access")
         with st.form("login"):
@@ -161,7 +203,6 @@ def main_app():
         st.write(f"**{user_name}** ({role})")
         st.write("---")
         
-        # Menu Permissions
         opts = ["Dashboard"]
         if role == "Admin": opts += ["Order Mgmt", "Production", "Packing", "Store", "Ecommerce", "User Mgmt"]
         elif role == "Production": opts = ["Dashboard", "Production"]
@@ -183,10 +224,10 @@ def main_app():
         tot_pend = packing_collection.count_documents({"status": "Pending"})
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Orders Logged", tot_orders)
-        c2.metric("Packing Pending", tot_pend)
+        c1.metric("Total Orders", tot_orders)
+        c2.metric("Packing Jobs", tot_pend)
         c3.metric("Production Queue", tasks_collection.count_documents({"status": "Pending"}))
-        c4.metric("System Status", "Online", "🟢")
+        c4.metric("Active Users", "5", "+0")
 
     # --- TAB: ORDER MANAGEMENT ---
     elif sel == "Order Mgmt":
@@ -214,7 +255,7 @@ def main_app():
                     else: st.error("Party and Item Name are required.")
         
         with t2:
-            st.subheader("Pending Liabilities (Received - Dispatched)")
+            st.subheader("Pending Liabilities")
             data = list(orders_collection.find())
             if data:
                 df = pd.DataFrame(data)
@@ -226,8 +267,7 @@ def main_app():
                 st.write("#### ⚠️ High Pending Items")
                 summary = df.groupby(['item'])['net_qty'].sum().sort_values(ascending=False).head(5)
                 st.dataframe(summary)
-            else:
-                st.info("No transaction data found.")
+            else: st.info("No transaction data.")
 
     # --- TAB: PRODUCTION ---
     elif sel == "Production":
@@ -256,6 +296,7 @@ def main_app():
 
         if role == "Admin":
             with t_new:
+                st.subheader("New Production Task")
                 with st.form("new_prod"):
                     d = st.date_input("Date")
                     i = st.text_input("Item")
@@ -284,7 +325,7 @@ def main_app():
                 with st.form("pack_create"):
                     c1, c2 = st.columns(2)
                     pd_date = c1.date_input("Packing Date")
-                    pd_party = c2.text_input("Party Name (Client)")
+                    pd_party = c2.text_input("Party Name")
                     c3, c4 = st.columns(2)
                     pd_item = c3.text_input("Item Name")
                     pd_qty = c4.number_input("Target Qty", min_value=1.0)
@@ -357,6 +398,7 @@ def main_app():
             else: st.success("No upcoming packing jobs.")
 
         with t3:
+            st.subheader("New Stock Entry")
             with st.form("store_entry"):
                 c1, c2 = st.columns(2)
                 s_date = c1.date_input("Date")
@@ -389,6 +431,7 @@ def main_app():
             else: st.info("No Data.")
 
         with t2:
+            st.subheader("Log Sales Data")
             with st.form("ecom_entry"):
                 c1, c2 = st.columns(2)
                 e_date = c1.date_input("Date")
