@@ -74,25 +74,31 @@ st.markdown("""
             margin-bottom: 0.5rem;
             border: 1px solid #D1D9E6;
             position: relative;
+            height: 100%; /* Ensure equal height in grid */
         }
         .task-header {
             font-weight: 700;
-            font-size: 1.2em;
+            font-size: 1.1em; /* Slightly smaller for grid */
             color: #001f3f;
             margin-bottom: 4px;
             line-height: 1.3;
             word-wrap: break-word;
+            height: 3em; /* Fixed height for alignment */
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
         }
         .task-sub {
-            font-size: 0.9em;
+            font-size: 0.85em;
             color: #555;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
         .task-metrics {
             display: flex;
             justify-content: space-between;
             background-color: #F8F9FA;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
             margin-top: 10px;
             border: 1px solid #EEE;
@@ -102,23 +108,23 @@ st.markdown("""
             width: 48%;
         }
         .metric-label {
-            font-size: 0.8em;
+            font-size: 0.75em;
             color: #777;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         .metric-value {
-            font-size: 1.1em;
+            font-size: 1.0em;
             font-weight: 700;
             color: #001f3f;
         }
         .badge {
             background: #F4F6F9;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.85em;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
             display: inline-block;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-weight: 600;
             color: #444;
             border: 1px solid #eee;
@@ -182,31 +188,31 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Optimized Unified Card Renderer (Strings Flattened)"""
+    """Render Card (Now optimized for Grid View)"""
     with st.container():
         # Party Badge Logic
         party_html = ""
         if 'party_name' in task:
             party_html = f"<div class='badge'>🏢 {task.get('party_name', 'Unknown')}</div>"
         
-        # Prepare Data for HTML
+        # Prepare Data
         target_val = smart_format(task['target_qty'])
         ready_val = smart_format(task.get('ready_qty', 0))
         
-        # Extra Specs for Packing (NO INDENTATION IN STRING)
+        # Extra Specs (Collapsed for Grid)
         specs_html = ""
         if 'box_type' in task:
-            specs_html = f"""<div style="font-size:0.85em; color:#666; margin-top:8px; padding-top:8px; border-top:1px dashed #eee;">
-📦 {task.get('box_type')} &nbsp;|&nbsp; 🏷️ {task.get('logo_status')} &nbsp;|&nbsp; ⬇️ {task.get('bottom_print')}
+            specs_html = f"""<div style="font-size:0.8em; color:#666; margin-top:6px; padding-top:6px; border-top:1px dashed #eee;">
+📦 {task.get('box_type')} | ⬇️ {task.get('bottom_print')}
 </div>"""
 
-        # UNIFIED HTML CARD - NO INDENTATION ALLOWED
+        # HTML CARD
         html_code = f"""
-<div class="task-card" style="border-left: 6px solid {color};">
+<div class="task-card" style="border-left: 5px solid {color};">
 {party_html}
 <div class="task-header">{task['item_name']}</div>
-<div class="task-sub">📅 {task['date']} &nbsp;|&nbsp; ⚡ Priority: <b>{task['priority']}</b></div>
-<div style="font-size:0.9em; color:#777; font-style:italic;">{task.get('notes', 'No notes')}</div>
+<div class="task-sub">📅 {task['date']} | P<b>{task['priority']}</b></div>
+<div style="font-size:0.85em; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{task.get('notes', 'No notes')}</div>
 {specs_html}
 <div class="task-metrics">
 <div class="metric-item">
@@ -223,19 +229,18 @@ def render_task_card(task, color, collection, role_can_delete=False):
 """
         st.markdown(html_code, unsafe_allow_html=True)
         
-        # ACTIONS
-        with st.expander("📝 Update Status"):
+        # ACTIONS (Using Expander)
+        with st.expander("Update"):
             with st.form(f"upd_{task['_id']}"):
-                n_ready = st.number_input("Ready Quantity", value=float(task.get('ready_qty', 0)), step=1.0)
+                n_ready = st.number_input("Ready", value=float(task.get('ready_qty', 0)), step=1.0)
                 n_stat = st.selectbox("Status", ["Pending", "Complete"], index=0)
                 
-                # Mobile-friendly full width buttons
-                if st.form_submit_button("💾 Save Progress", use_container_width=True):
+                if st.form_submit_button("Save", use_container_width=True):
                     collection.update_one({"_id": task['_id']}, {"$set": {"ready_qty": n_ready, "status": n_stat}})
                     st.rerun()
                 
                 if role_can_delete:
-                    if st.form_submit_button("🗑 Delete Task", type="primary", use_container_width=True):
+                    if st.form_submit_button("🗑", type="primary", use_container_width=True):
                         collection.delete_one({"_id": task['_id']})
                         st.rerun()
 
@@ -351,14 +356,26 @@ def main_app():
             current = [t for t in tasks if t['date'] == today]
             future = [t for t in tasks if t['date'] > today]
             
+            # --- 2 COLUMN GRID LAYOUT ---
             if backlog: 
-                st.subheader("🔴 Backlog"); 
-                for t in backlog: render_task_card(t, "#FF4136", tasks_collection, role=="Admin")
-            st.subheader("🟢 Today"); 
-            for t in current: render_task_card(t, "#2ECC40", tasks_collection, role=="Admin")
+                st.subheader("🔴 Backlog")
+                cols = st.columns(2)
+                for i, t in enumerate(backlog):
+                    with cols[i % 2]: render_task_card(t, "#FF4136", tasks_collection, role=="Admin")
+
+            st.subheader("🟢 Today")
+            cols = st.columns(2)
+            if current:
+                for i, t in enumerate(current):
+                    with cols[i % 2]: render_task_card(t, "#2ECC40", tasks_collection, role=="Admin")
+            else:
+                st.info("No tasks for today.")
+
             if future: 
-                st.subheader("🔵 Upcoming"); 
-                for t in future: render_task_card(t, "#0074D9", tasks_collection, role=="Admin")
+                st.subheader("🔵 Upcoming")
+                cols = st.columns(2)
+                for i, t in enumerate(future):
+                    with cols[i % 2]: render_task_card(t, "#0074D9", tasks_collection, role=="Admin")
 
         if role == "Admin":
             with t_new:
@@ -418,14 +435,26 @@ def main_app():
             p_today = [t for t in all_pack if t['date'] == today_str]
             p_upcoming = [t for t in all_pack if t['date'] > today_str]
             
+            # --- 2 COLUMN GRID LAYOUT ---
             if p_backlog:
-                st.subheader("🔴 Backlog"); 
-                for t in p_backlog: render_task_card(t, "#FF4136", packing_collection, role=="Admin")
-            st.subheader("🟢 Today"); 
-            for t in p_today: render_task_card(t, "#2ECC40", packing_collection, role=="Admin")
+                st.subheader("🔴 Backlog")
+                cols = st.columns(2)
+                for i, t in enumerate(p_backlog):
+                    with cols[i % 2]: render_task_card(t, "#FF4136", packing_collection, role=="Admin")
+            
+            st.subheader("🟢 Today")
+            cols = st.columns(2)
+            if p_today:
+                for i, t in enumerate(p_today):
+                    with cols[i % 2]: render_task_card(t, "#2ECC40", packing_collection, role=="Admin")
+            else:
+                st.info("No jobs today.")
+            
             if p_upcoming:
-                st.subheader("🔵 Upcoming"); 
-                for t in p_upcoming: render_task_card(t, "#0074D9", packing_collection, role=="Admin")
+                st.subheader("🔵 Upcoming")
+                cols = st.columns(2)
+                for i, t in enumerate(p_upcoming):
+                    with cols[i % 2]: render_task_card(t, "#0074D9", packing_collection, role=="Admin")
 
         with t_table:
             st.dataframe(pd.DataFrame(list(packing_collection.find({"date": {"$gt": today_str}}, {"_id":0}).sort("date", 1))))
