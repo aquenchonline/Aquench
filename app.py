@@ -51,7 +51,7 @@ st.markdown("""
         /* 4. FORMS: White Boxed Look */
         [data-testid="stForm"] {
             background-color: #FFFFFF;
-            padding: 25px;
+            padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             border: 1px solid #E0E0E0;
@@ -60,20 +60,25 @@ st.markdown("""
         /* 5. METRICS: White Boxed Look */
         [data-testid="stMetric"] {
             background-color: #FFFFFF;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #F0F0F0;
             text-align: center;
         }
 
-        /* 6. CUSTOM CARD STYLING (For Tasks) */
+        /* 6. MOBILE-RESPONSIVE CARD STYLING */
         .task-card {
             background-color: #FFFFFF;
-            padding: 20px;
+            padding: 1.2rem;
             border-radius: 12px;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.08); /* Nice float effect */
-            margin-bottom: 15px;
-            border: 1px solid #EAEAEA;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08); /* Deeper shadow for pop */
+            margin-bottom: 1rem;
+            border: 1px solid #D1D9E6; /* Distinct border for boxed look */
+            transition: transform 0.2s;
+        }
+        .task-card:hover {
+            transform: translateY(-2px); /* Subtle lift effect */
         }
     </style>
 """, unsafe_allow_html=True)
@@ -134,19 +139,21 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Generic Card Renderer for Production and Packing"""
+    """Generic Card Renderer - Optimized for Mobile"""
     with st.container():
+        # Party Name Badge
         party_html = ""
         if 'party_name' in task:
-            party_html = f"<div style='background:#F4F6F9; padding:4px 8px; border-radius:4px; font-size:0.85em; display:inline-block; margin-bottom:8px; font-weight:600; color:#444;'>🏢 {task.get('party_name', 'Unknown')}</div>"
+            party_html = f"<div style='background:#F4F6F9; padding:4px 10px; border-radius:6px; font-size:0.85em; display:inline-block; margin-bottom:10px; font-weight:600; color:#444; border:1px solid #eee;'>🏢 {task.get('party_name', 'Unknown')}</div>"
         
         # HTML Block (Left Aligned for Markdown safety)
+        # Added word-wrap and line-height for mobile readability
         st.markdown(f"""
 <div class="task-card" style="border-left: 6px solid {color};">
 {party_html}
-<div style="font-weight:700; font-size:1.15em; color:#001f3f; margin-bottom:4px;">{task['item_name']}</div>
-<div style="font-size:0.9em; color:#666; margin-bottom:4px;">📅 {task['date']} | ⚡ P{task['priority']}</div>
-<div style="font-size:0.85em; color:#888; font-style:italic;">{task.get('notes', '')}</div>
+<div style="font-weight:700; font-size:1.2em; color:#001f3f; margin-bottom:6px; line-height:1.3; word-wrap:break-word;">{task['item_name']}</div>
+<div style="font-size:0.95em; color:#555; margin-bottom:8px;">📅 <b>{task['date']}</b> | ⚡ Priority: <b>{task['priority']}</b></div>
+<div style="font-size:0.9em; color:#777; font-style:italic; background:#FAFAFA; padding:5px; border-radius:4px;">{task.get('notes', 'No notes')}</div>
 </div>
 """, unsafe_allow_html=True)
         
@@ -154,22 +161,25 @@ def render_task_card(task, color, collection, role_can_delete=False):
         if 'box_type' in task:
             st.markdown(f"**📦 {task.get('box_type')}** | 🏷️ {task.get('logo_status')} | ⬇️ {task.get('bottom_print')}")
 
+        # Metrics layout
         c1, c2 = st.columns(2)
-        c1.metric("Target", smart_format(task['target_qty']))
-        c2.metric("Ready", smart_format(task['ready_qty']))
+        c1.metric("Target Qty", smart_format(task['target_qty']))
+        c2.metric("Ready Qty", smart_format(task['ready_qty']))
         
-        with st.expander("Update / Action"):
+        # Action Area
+        with st.expander("📝 Update Progress"):
             with st.form(f"upd_{task['_id']}"):
-                n_ready = st.number_input("Ready Qty", value=float(task.get('ready_qty', 0)))
+                n_ready = st.number_input("Ready Qty", value=float(task.get('ready_qty', 0)), step=1.0)
                 n_stat = st.selectbox("Status", ["Pending", "Complete"], index=0)
                 
+                # Buttons use full container width for easy mobile tapping
                 c_btn1, c_btn2 = st.columns(2)
-                if c_btn1.form_submit_button("💾 Save"):
+                if c_btn1.form_submit_button("💾 Save", use_container_width=True):
                     collection.update_one({"_id": task['_id']}, {"$set": {"ready_qty": n_ready, "status": n_stat}})
                     st.rerun()
                 
                 if role_can_delete:
-                    if c_btn2.form_submit_button("🗑 Delete"):
+                    if c_btn2.form_submit_button("🗑 Delete", type="primary", use_container_width=True):
                         collection.delete_one({"_id": task['_id']})
                         st.rerun()
 
@@ -177,7 +187,7 @@ def render_task_card(task, color, collection, role_can_delete=False):
 def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True) # Spacer
+        st.markdown("<br><br>", unsafe_allow_html=True)
         st.title("🔐 Aquench ERP")
         st.markdown("##### System Access")
         with st.form("login"):
@@ -245,7 +255,7 @@ def main_app():
                 o_item = c4.text_input("Item Name")
                 o_qty = c5.number_input("Quantity", min_value=1.0)
                 
-                if st.form_submit_button("Save Transaction"):
+                if st.form_submit_button("Save Transaction", use_container_width=True):
                     if o_party and o_item:
                         orders_collection.insert_one({
                             "date": str(o_date), "type": o_type, "party": o_party,
@@ -302,7 +312,7 @@ def main_app():
                     i = st.text_input("Item")
                     q = st.number_input("Target", min_value=1.0)
                     p = st.selectbox("Priority", [1,2,3])
-                    if st.form_submit_button("Assign"):
+                    if st.form_submit_button("Assign", use_container_width=True):
                         tasks_collection.insert_one({"date":str(d), "item_name":i, "target_qty":q, "ready_qty":0, "priority":p, "status":"Pending"})
                         st.success("Assigned"); st.rerun()
         
@@ -335,7 +345,7 @@ def main_app():
                     pd_box = r2.selectbox("Box Type", ["Master", "Inner", "Custom", "Loose"])
                     pd_logo = r3.text_input("Logo Status", "Standard")
                     pd_bot = r4.text_input("Bottom Print", "N/A")
-                    if st.form_submit_button("🚀 Assign Packing"):
+                    if st.form_submit_button("🚀 Assign Packing", use_container_width=True):
                         packing_collection.insert_one({
                             "date": str(pd_date), "party_name": pd_party, "item_name": pd_item,
                             "target_qty": pd_qty, "ready_qty": 0, "priority": pd_prio,
@@ -406,7 +416,7 @@ def main_app():
                 s_item = st.text_input("Item Name")
                 s_qty = st.number_input("Qty", step=0.1)
                 s_note = st.text_input("Note")
-                if st.form_submit_button("Update Stock"):
+                if st.form_submit_button("Update Stock", use_container_width=True):
                     store_collection.insert_one({"date": str(s_date), "type": s_type, "item": s_item, "qty": s_qty, "notes": s_note})
                     st.success("Updated"); time.sleep(1); st.rerun()
 
@@ -440,7 +450,7 @@ def main_app():
                 e_ord = c3.number_input("Orders", min_value=0)
                 e_dis = c4.number_input("Dispatches", min_value=0)
                 e_ret = c5.number_input("Returns", min_value=0)
-                if st.form_submit_button("Save Log"):
+                if st.form_submit_button("Save Log", use_container_width=True):
                     ecom_collection.insert_one({"date": str(e_date), "channel": e_chan, "orders": e_ord, "dispatches": e_dis, "returns": e_ret})
                     st.success("Logged!"); st.rerun()
 
