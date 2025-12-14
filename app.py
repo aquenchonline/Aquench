@@ -71,7 +71,7 @@ st.markdown("""
             padding: 1.2rem;
             border-radius: 12px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.08);
-            margin-bottom: 0.5rem; /* Reduced margin to stick to expander */
+            margin-bottom: 0.5rem;
             border: 1px solid #D1D9E6;
             position: relative;
         }
@@ -182,7 +182,7 @@ def smart_format(num):
     except: return num
 
 def render_task_card(task, color, collection, role_can_delete=False):
-    """Optimized Unified Card Renderer"""
+    """Optimized Unified Card Renderer (Fixed Indentation)"""
     with st.container():
         # Party Badge Logic
         party_html = ""
@@ -202,8 +202,8 @@ def render_task_card(task, color, collection, role_can_delete=False):
             </div>
             """
 
-        # UNIFIED HTML CARD
-        st.markdown(f"""
+        # UNIFIED HTML CARD - MUST BE LEFT ALIGNED (No indent)
+        html_code = f"""
 <div class="task-card" style="border-left: 6px solid {color};">
     {party_html}
     <div class="task-header">{task['item_name']}</div>
@@ -223,9 +223,10 @@ def render_task_card(task, color, collection, role_can_delete=False):
         </div>
     </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+        st.markdown(html_code, unsafe_allow_html=True)
         
-        # ACTIONS (Hidden by default to save space, but attached to card)
+        # ACTIONS
         with st.expander("📝 Update Status"):
             with st.form(f"upd_{task['_id']}"):
                 n_ready = st.number_input("Ready Quantity", value=float(task.get('ready_qty', 0)), step=1.0)
