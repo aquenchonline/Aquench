@@ -2,6 +2,7 @@ import streamlit as st
 import pymongo
 import time
 import pandas as pd
+import datetime
 
 # --- 1. CONFIGURATION & CSS (AdminUX) ---
 st.set_page_config(page_title="Aquench ERP", layout="wide")
@@ -63,8 +64,9 @@ client = init_connection()
 if not client:
     st.stop()
 
-db = client.my_erp_db  # Using your DB
+db = client.my_erp_db  # Your Database Name
 users_collection = db.users
+tasks_collection = db.production_tasks
 
 # --- 3. AUTHENTICATION LOGIC ---
 
@@ -118,7 +120,6 @@ def login_page():
         st.write("---")
         
         # --- FIRST TIME SETUP (Expander) ---
-        # Use this to create your first user, then you can remove this code block or hide it.
         with st.expander("⚠️ First Time Setup (Click Here)"):
             st.warning("Only use this if the database is empty.")
             new_user = st.text_input("New Admin Username")
@@ -183,14 +184,213 @@ def main_app():
         col2.metric("Pending Dispatch", "45", "-2%")
         col3.metric("Production Queue", "12", "Normal")
         col4.metric("Returns", "3", "-1%")
+        st.info(f"You are logged in as **{role}**")
 
     elif selection == "Order Management":
         st.title("📦 Order Management")
-        st.info("Module Under Construction")
+        st.info("Input: Order Received / Dispatch -> Output: Pending Balance")
+        
+        # Placeholder for Matrix View
+        st.write("### Pending Orders Matrix (Demo)")
+        df = pd.DataFrame({
+            "Party Name": ["Party A", "Party B", "Party A"],
+            "Item": ["Widget X", "Widget Y", "Widget X"],
+            "Ordered": [100, 50, 200],
+            "Dispatched": [80, 50, 0],
+            "Balance": [20, 0, 200]
+        })
+        st.dataframe(df, use_container_width=True)
 
     elif selection == "Production":
-        st.title("🏭 Production & Packing")
-        st.write(f"Welcome {role}. Access Level: {role}")
+        st.title("🏭 Production Management")
+        
+        # --- Helper Functions ---
+        def smart_format(num):
+            """Converts 100.0 -> 100, 10.5 -> 10.5"""
+            try:
+                f_num = float(num)
+                if f_num.is_integer():
+                    return int(f_num)
+                return round(f_num, 1)
+            except:
+                return num
+
+        # --- Tab Logic based on Role ---
+        if role == "Admin":
+            tab_names = ["📌 Pending Cards", "➕ Create Task", "📅 Upcoming Table", "📜 All Tasks (History)"]
+            tabs = st.tabs(tab_names)
+            t_pending, t_create, t_upcoming, t_history = tabs[0], tabs[1], tabs[2], tabs[3]
+        else:
+            # Production Incharge sees restricted view
+            tab_names = ["📌 Pending Cards", "📅 Upcoming Table"]
+            tabs = st.tabs(tab_names)
+            t_pending, t_upcoming = tabs[0], tabs[1]
+
+        # --- TAB: CREATE TASK (Admin Only) ---
+        if role == "Admin":
+            with t_create:
+                st.subheader("Assign New Job")
+                with st.form("create_task_form"):
+                    c1, c2 = st.columns(2)
+                    task_date = c1.date_input("Production Date")
+                    item_name = c2.text_input("Item / Product Name")
+                    
+                    c3, c4 = st.columns(2)
+                    target_qty = c3.number_input("Target Qty", min_value=1.0, step=1.0)
+                    priority = c4.selectbox("Priority", [1, 2, 3], help="1 = High, 3 = Low")
+                    
+                    notes = st.text_area("Special Instructions")
+                    
+                    submitted = st.form_submit_button("🚀 Assign Task", use_container_width=True)
+                    
+                    if submitted:
+                        new_task = {
+                            "date": str(task_date), # Store as string YYYY-MM-DD
+                            "item_name": item_name,
+                            "target_qty": target_qty,
+                            "ready_qty": 0,
+                            "priority": priority,
+                            "notes": notes,
+                            "status": "Pending",
+                            "created_at": time.time()
+                        }
+                        tasks_collection.insert_one(new_task)
+                        st.success(f"Task for {item_name} assigned!")
+                        time.sleep(1)
+                        st.rerun()
+
+        # --- TAB: PENDING CARDS (The Main Dashboard) ---
+        with t_pending:
+            st.subheader("Live Job Cards")
+            
+            # Fetch only incomplete tasks
+            # Sort: Priority (1=High), then Date (Oldest)
+            pending_cursor = tasks_collection.find({"status": {"$ne": "Complete"}}).sort([("priority", 1), ("date", 1)])
+            all_pending = list(pending_cursor)
+            
+            # Categorize into Buckets
+            today_str = str(datetime.date.today())
+            
+            backlog = [t for t in all_pending if t['date'] < today_str]
+            today_tasks = [t for t in all_pending if t['date'] == today_str]
+            upcoming = [t for t in all_pending if t['date'] > today_str]
+            
+            # Render Function for Cards
+            def render_task_card(task, color_bar):
+                # Card Container
+                with st.container():
+                    st.markdown(f"""
+                    <div style="
+                        border-left: 5px solid {color_bar}; 
+                        background-color: white; 
+                        padding: 15px; 
+                        border-radius: 5px; 
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+                        margin-bottom: 10px;">
+                        <h4 style="margin:0; color:#001f3f;">{task['item_name']}</h4>
+                        <p style="margin:0; font-size: 0.9em; color: #666;">
+                            📅 {task['date']} | ⚡ Priority: {task['priority']}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Metrics Row
+                    c1, c2, c3 = st.columns([1, 1, 2])
+                    c1.metric("Target", smart_format(task['target_qty']))
+                    c2.metric("Ready", smart_format(task['ready_qty']))
+                    
+                    # Update Expander
+                    with st.expander("Update Progress"):
+                        with st.form(f"update_{task['_id']}"):
+                            new_ready = st.number_input("Ready Qty", value=float(task['ready_qty']), key=f"qty_{task['_id']}")
+                            new_status = st.selectbox("Status", ["Pending", "In Progress", "Hold", "Complete"], index=0, key=f"stat_{task['_id']}")
+                            
+                            btn_col1, btn_col2 = st.columns(2)
+                            update_click = btn_col1.form_submit_button("💾 Save", use_container_width=True)
+                            
+                            # Delete Button (Admin Only)
+                            delete_click = False
+                            if role == "Admin":
+                                delete_click = btn_col2.form_submit_button("🗑 Delete", type="primary", use_container_width=True)
+                            
+                            if update_click:
+                                tasks_collection.update_one(
+                                    {"_id": task["_id"]}, 
+                                    {"$set": {"ready_qty": new_ready, "status": new_status}}
+                                )
+                                st.success("Updated!")
+                                time.sleep(0.5)
+                                st.rerun()
+                                
+                            if delete_click:
+                                tasks_collection.delete_one({"_id": task["_id"]})
+                                st.warning("Deleted!")
+                                time.sleep(0.5)
+                                st.rerun()
+
+            # 🔴 Backlog Section
+            if backlog:
+                st.markdown("### 🔴 Backlog (Overdue)")
+                for task in backlog:
+                    render_task_card(task, "#FF4136") # Red
+            
+            # 🟢 Today Section
+            st.markdown("### 🟢 Today's Plan")
+            if not today_tasks:
+                st.info("No tasks scheduled for today.")
+            for task in today_tasks:
+                render_task_card(task, "#2ECC40") # Green
+            
+            # 🔵 Upcoming Section
+            if upcoming:
+                st.markdown("### 🔵 Upcoming Pending")
+                for task in upcoming:
+                    render_task_card(task, "#0074D9") # Blue
+
+        # --- TAB: UPCOMING TABLE ---
+        with t_upcoming:
+            st.subheader("📅 Future Planning")
+            future_cursor = tasks_collection.find({"date": {"$gt": today_str}}).sort("date", 1)
+            future_data = list(future_cursor)
+            
+            if future_data:
+                df_future = pd.DataFrame(future_data)
+                display_cols = ["date", "item_name", "target_qty", "priority", "notes"]
+                st.dataframe(df_future[display_cols], use_container_width=True)
+            else:
+                st.info("No upcoming tasks.")
+
+        # --- TAB: HISTORY (Admin Only) ---
+        if role == "Admin":
+            with t_history:
+                st.subheader("📜 All Tasks History")
+                
+                search_query = st.text_input("🔍 Search by Item Name", "")
+                
+                query = {}
+                if search_query:
+                    query["item_name"] = {"$regex": search_query, "$options": "i"}
+                
+                # Pagination
+                page_size = 10
+                total_docs = tasks_collection.count_documents(query)
+                total_pages = max(1, (total_docs + page_size - 1) // page_size)
+                
+                page_num = st.number_input("Page", min_value=1, max_value=total_pages, step=1)
+                skip_count = (page_num - 1) * page_size
+                
+                history_cursor = tasks_collection.find(query).sort("date", -1).skip(skip_count).limit(page_size)
+                history_data = list(history_cursor)
+                
+                if history_data:
+                    df_hist = pd.DataFrame(history_data)
+                    df_hist['_id'] = df_hist['_id'].astype(str)
+                    st.dataframe(
+                        df_hist[['date', 'item_name', 'target_qty', 'ready_qty', 'status']], 
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No records found.")
 
     elif selection == "Store":
         st.title("🏪 Store Inventory")
