@@ -7,7 +7,6 @@ import datetime
 # --- 1. CONFIGURATION & CSS (AdminUX) ---
 st.set_page_config(page_title="Aquench ERP", layout="wide")
 
-# Custom CSS for White Sidebar, Navy Text, Orange Selection
 st.markdown("""
     <style>
         /* Sidebar Background */
@@ -52,7 +51,6 @@ st.markdown("""
 @st.cache_resource
 def init_connection():
     try:
-        # Uses the manually fixed string in secrets.toml
         return pymongo.MongoClient(st.secrets["mongo"]["connection_string"])
     except Exception as e:
         st.error(f"❌ Connection Error: {e}")
@@ -60,30 +58,48 @@ def init_connection():
 
 client = init_connection()
 
-# Stop if connection failed
 if not client:
     st.stop()
 
-db = client.my_erp_db  # Your Database Name
+db = client.my_erp_db
 users_collection = db.users
 tasks_collection = db.production_tasks
 
-# --- 3. AUTHENTICATION LOGIC ---
+# --- 3. AUTO-SETUP USERS (Background Script) ---
+def setup_initial_users():
+    """Ensures the requested users exist in the database."""
+    # List of users to ensure exist
+    required_users = [
+        {"username": "production", "password": "Amavik@80", "role": "Production", "name": "Production Incharge"},
+        {"username": "packing", "password": "Amavik@97", "role": "Packing", "name": "Packing Incharge"},
+        {"username": "store", "password": "Amavik@17", "role": "Store", "name": "Store Manager"},
+        {"username": "ecommerce", "password": "Amavik@12", "role": "Ecommerce", "name": "Ecom Manager"},
+        {"username": "amar", "password": "Aquench@1933", "role": "Admin", "name": "Amar (Admin)"}
+    ]
+
+    for user in required_users:
+        # Check if username exists
+        if not users_collection.find_one({"username": user["username"]}):
+            users_collection.insert_one(user)
+            print(f"✅ Created user: {user['username']}")
+
+# Run setup once
+setup_initial_users()
+
+# --- 4. AUTHENTICATION LOGIC ---
 
 def check_login(username, password):
-    """Verifies credentials against MongoDB."""
     if not username or not password:
         return None
-        
-    user = users_collection.find_one({"username": username})
     
-    # Simple password check (In production, hash passwords!)
+    # Case insensitive username search
+    user = users_collection.find_one({"username": username.lower()})
+    
     if user and user['password'] == password:
         return user
     return None
 
 def init_session():
-    """Initializes session state variables."""
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
         st.session_state['user_role'] = None
@@ -91,19 +107,18 @@ def init_session():
 
 init_session()
 
-# --- 4. LOGIN PAGE ---
+# --- 5. LOGIN PAGE ---
 def login_page():
-    # Center the login box
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.title("🔐 Aquench ERP Login")
-        st.markdown("Please sign in to access your dashboard.")
+        st.title("🔐 Aquench ERP")
+        st.markdown("##### Authorized Access Only")
         
         with st.form("login_form"):
-            username = st.text_input("Username").lower()
+            username = st.text_input("User ID")
             password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Login", use_container_width=True)
+            submitted = st.form_submit_button("Sign In", use_container_width=True)
             
             if submitted:
                 user = check_login(username, password)
@@ -111,305 +126,173 @@ def login_page():
                     st.session_state['logged_in'] = True
                     st.session_state['user_role'] = user['role']
                     st.session_state['user_name'] = user['name']
-                    st.success(f"Welcome back, {user['name']}!")
-                    time.sleep(1)
+                    st.success(f"Welcome, {user['name']}")
+                    time.sleep(0.5)
                     st.rerun()
                 else:
-                    st.error("Invalid Username or Password")
+                    st.error("❌ Invalid ID or Password")
 
-        st.write("---")
-        
-        # --- FIRST TIME SETUP (Expander) ---
-        with st.expander("⚠️ First Time Setup (Click Here)"):
-            st.warning("Only use this if the database is empty.")
-            new_user = st.text_input("New Admin Username")
-            new_pass = st.text_input("New Password")
-            if st.button("Create Admin User"):
-                if new_user and new_pass:
-                    # Check if user exists
-                    if users_collection.find_one({"username": new_user}):
-                        st.error("User already exists!")
-                    else:
-                        users_collection.insert_one({
-                            "username": new_user.lower(),
-                            "password": new_pass,
-                            "role": "Admin",
-                            "name": "Admin User"
-                        })
-                        st.success("User Created! You can now login.")
-                else:
-                    st.error("Please fill fields.")
-
-# --- 5. MAIN APP (RBAC LOGIC) ---
+# --- 6. MAIN APP ---
 def main_app():
     role = st.session_state['user_role']
     user_name = st.session_state['user_name']
 
-    # --- Sidebar Logic based on Roles ---
+    # --- Sidebar ---
     with st.sidebar:
         st.title("Aquench ERP")
-        st.markdown(f"**User:** {user_name}")
+        st.write(f"👤 **{user_name}**")
         st.caption(f"Role: {role}")
         st.write("---")
 
-        # Define Menu Options per Role
-        menu_options = []
+        # Menu Options
+        menu_options = ["Dashboard"] # Default
         
         if role == "Admin":
             menu_options = ["Dashboard", "Order Management", "Production", "Store", "Ecommerce", "User Mgmt"]
-        elif role == "Production":
+        elif role in ["Production", "Packing"]:
+            # Packing and Production share the Production module view
             menu_options = ["Dashboard", "Production"]
         elif role == "Store":
             menu_options = ["Dashboard", "Store"]
         elif role == "Ecommerce":
             menu_options = ["Dashboard", "Ecommerce"]
-        
-        # Default fallback
-        if not menu_options:
-            menu_options = ["Dashboard"]
 
         selection = st.radio("Navigate", menu_options)
         
         st.write("---")
         if st.button("Logout", type="primary"):
             st.session_state['logged_in'] = False
-            st.session_state['user_role'] = None
             st.rerun()
 
-    # --- Page Content Router ---
+    # --- Content ---
     if selection == "Dashboard":
         st.title("📊 Command Center")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Orders", "1,204", "+12%")
-        col2.metric("Pending Dispatch", "45", "-2%")
-        col3.metric("Production Queue", "12", "Normal")
+        col1.metric("Orders", "1,204", "+12%")
+        col2.metric("Pending", "45", "-2%")
+        col3.metric("Production", "12", "Normal")
         col4.metric("Returns", "3", "-1%")
-        st.info(f"You are logged in as **{role}**")
 
     elif selection == "Order Management":
         st.title("📦 Order Management")
-        st.info("Input: Order Received / Dispatch -> Output: Pending Balance")
-        
-        # Placeholder for Matrix View
-        st.write("### Pending Orders Matrix (Demo)")
-        df = pd.DataFrame({
-            "Party Name": ["Party A", "Party B", "Party A"],
-            "Item": ["Widget X", "Widget Y", "Widget X"],
-            "Ordered": [100, 50, 200],
-            "Dispatched": [80, 50, 0],
-            "Balance": [20, 0, 200]
-        })
-        st.dataframe(df, use_container_width=True)
+        st.info("Under Construction")
 
     elif selection == "Production":
-        st.title("🏭 Production Management")
+        st.title("🏭 Production & Packing")
         
-        # --- Helper Functions ---
         def smart_format(num):
-            """Converts 100.0 -> 100, 10.5 -> 10.5"""
             try:
                 f_num = float(num)
-                if f_num.is_integer():
-                    return int(f_num)
+                if f_num.is_integer(): return int(f_num)
                 return round(f_num, 1)
-            except:
-                return num
+            except: return num
 
-        # --- Tab Logic based on Role ---
+        # Tab Access Control
         if role == "Admin":
-            tab_names = ["📌 Pending Cards", "➕ Create Task", "📅 Upcoming Table", "📜 All Tasks (History)"]
+            tab_names = ["📌 Pending Cards", "➕ Create Task", "📅 Upcoming Table", "📜 History"]
             tabs = st.tabs(tab_names)
             t_pending, t_create, t_upcoming, t_history = tabs[0], tabs[1], tabs[2], tabs[3]
         else:
-            # Production Incharge sees restricted view
+            # Production & Packing Roles see this
             tab_names = ["📌 Pending Cards", "📅 Upcoming Table"]
             tabs = st.tabs(tab_names)
             t_pending, t_upcoming = tabs[0], tabs[1]
 
-        # --- TAB: CREATE TASK (Admin Only) ---
+        # 1. Create Task (Admin Only)
         if role == "Admin":
             with t_create:
-                st.subheader("Assign New Job")
-                with st.form("create_task_form"):
+                with st.form("create_task"):
                     c1, c2 = st.columns(2)
-                    task_date = c1.date_input("Production Date")
-                    item_name = c2.text_input("Item / Product Name")
-                    
+                    task_date = c1.date_input("Date")
+                    item_name = c2.text_input("Item Name")
                     c3, c4 = st.columns(2)
-                    target_qty = c3.number_input("Target Qty", min_value=1.0, step=1.0)
-                    priority = c4.selectbox("Priority", [1, 2, 3], help="1 = High, 3 = Low")
-                    
-                    notes = st.text_area("Special Instructions")
-                    
-                    submitted = st.form_submit_button("🚀 Assign Task", use_container_width=True)
-                    
-                    if submitted:
-                        new_task = {
-                            "date": str(task_date), # Store as string YYYY-MM-DD
+                    target = c3.number_input("Target Qty", min_value=1.0)
+                    priority = c4.selectbox("Priority", [1, 2, 3])
+                    notes = st.text_area("Notes")
+                    if st.form_submit_button("Assign Task"):
+                        tasks_collection.insert_one({
+                            "date": str(task_date),
                             "item_name": item_name,
-                            "target_qty": target_qty,
+                            "target_qty": target,
                             "ready_qty": 0,
                             "priority": priority,
                             "notes": notes,
-                            "status": "Pending",
-                            "created_at": time.time()
-                        }
-                        tasks_collection.insert_one(new_task)
-                        st.success(f"Task for {item_name} assigned!")
+                            "status": "Pending"
+                        })
+                        st.success("Task Created")
                         time.sleep(1)
                         st.rerun()
 
-        # --- TAB: PENDING CARDS (The Main Dashboard) ---
+        # 2. Pending Cards
         with t_pending:
-            st.subheader("Live Job Cards")
+            # Sort: Priority then Date
+            cursor = tasks_collection.find({"status": {"$ne": "Complete"}}).sort([("priority", 1), ("date", 1)])
+            tasks = list(cursor)
             
-            # Fetch only incomplete tasks
-            # Sort: Priority (1=High), then Date (Oldest)
-            pending_cursor = tasks_collection.find({"status": {"$ne": "Complete"}}).sort([("priority", 1), ("date", 1)])
-            all_pending = list(pending_cursor)
-            
-            # Categorize into Buckets
-            today_str = str(datetime.date.today())
-            
-            backlog = [t for t in all_pending if t['date'] < today_str]
-            today_tasks = [t for t in all_pending if t['date'] == today_str]
-            upcoming = [t for t in all_pending if t['date'] > today_str]
-            
-            # Render Function for Cards
-            def render_task_card(task, color_bar):
-                # Card Container
+            today = str(datetime.date.today())
+            backlog = [t for t in tasks if t['date'] < today]
+            today_t = [t for t in tasks if t['date'] == today]
+            upcoming = [t for t in tasks if t['date'] > today]
+
+            def show_card(task, color):
                 with st.container():
                     st.markdown(f"""
-                    <div style="
-                        border-left: 5px solid {color_bar}; 
-                        background-color: white; 
-                        padding: 15px; 
-                        border-radius: 5px; 
-                        box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-                        margin-bottom: 10px;">
-                        <h4 style="margin:0; color:#001f3f;">{task['item_name']}</h4>
-                        <p style="margin:0; font-size: 0.9em; color: #666;">
-                            📅 {task['date']} | ⚡ Priority: {task['priority']}
-                        </p>
+                    <div style="border-left: 5px solid {color}; background: white; padding: 10px; margin-bottom: 10px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <div style="font-weight:bold; color:#001f3f;">{task['item_name']}</div>
+                        <div style="font-size:0.85em; color:#666;">{task['date']} | P{task['priority']}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    # Metrics Row
-                    c1, c2, c3 = st.columns([1, 1, 2])
+                    c1, c2 = st.columns(2)
                     c1.metric("Target", smart_format(task['target_qty']))
                     c2.metric("Ready", smart_format(task['ready_qty']))
                     
-                    # Update Expander
-                    with st.expander("Update Progress"):
-                        with st.form(f"update_{task['_id']}"):
-                            new_ready = st.number_input("Ready Qty", value=float(task['ready_qty']), key=f"qty_{task['_id']}")
-                            new_status = st.selectbox("Status", ["Pending", "In Progress", "Hold", "Complete"], index=0, key=f"stat_{task['_id']}")
-                            
-                            btn_col1, btn_col2 = st.columns(2)
-                            update_click = btn_col1.form_submit_button("💾 Save", use_container_width=True)
-                            
-                            # Delete Button (Admin Only)
-                            delete_click = False
-                            if role == "Admin":
-                                delete_click = btn_col2.form_submit_button("🗑 Delete", type="primary", use_container_width=True)
-                            
-                            if update_click:
-                                tasks_collection.update_one(
-                                    {"_id": task["_id"]}, 
-                                    {"$set": {"ready_qty": new_ready, "status": new_status}}
-                                )
-                                st.success("Updated!")
-                                time.sleep(0.5)
+                    with st.expander("Update"):
+                        with st.form(f"upd_{task['_id']}"):
+                            n_ready = st.number_input("Ready", value=float(task.get('ready_qty', 0)))
+                            n_stat = st.selectbox("Status", ["Pending", "Complete"], index=0)
+                            if st.form_submit_button("Save"):
+                                tasks_collection.update_one({"_id": task['_id']}, {"$set": {"ready_qty": n_ready, "status": n_stat}})
                                 st.rerun()
                                 
-                            if delete_click:
-                                tasks_collection.delete_one({"_id": task["_id"]})
-                                st.warning("Deleted!")
-                                time.sleep(0.5)
-                                st.rerun()
-
-            # 🔴 Backlog Section
             if backlog:
-                st.markdown("### 🔴 Backlog (Overdue)")
-                for task in backlog:
-                    render_task_card(task, "#FF4136") # Red
+                st.subheader("🔴 Backlog")
+                for t in backlog: show_card(t, "#FF4136")
             
-            # 🟢 Today Section
-            st.markdown("### 🟢 Today's Plan")
-            if not today_tasks:
-                st.info("No tasks scheduled for today.")
-            for task in today_tasks:
-                render_task_card(task, "#2ECC40") # Green
+            st.subheader("🟢 Today")
+            for t in today_t: show_card(t, "#2ECC40")
             
-            # 🔵 Upcoming Section
             if upcoming:
-                st.markdown("### 🔵 Upcoming Pending")
-                for task in upcoming:
-                    render_task_card(task, "#0074D9") # Blue
+                st.subheader("🔵 Upcoming")
+                for t in upcoming: show_card(t, "#0074D9")
 
-        # --- TAB: UPCOMING TABLE ---
+        # 3. Upcoming Table
         with t_upcoming:
-            st.subheader("📅 Future Planning")
-            future_cursor = tasks_collection.find({"date": {"$gt": today_str}}).sort("date", 1)
-            future_data = list(future_cursor)
-            
-            if future_data:
-                df_future = pd.DataFrame(future_data)
-                display_cols = ["date", "item_name", "target_qty", "priority", "notes"]
-                st.dataframe(df_future[display_cols], use_container_width=True)
+            st.subheader("📅 Future Plan")
+            future_tasks = list(tasks_collection.find({"date": {"$gt": today}}).sort("date", 1))
+            if future_tasks:
+                st.dataframe(pd.DataFrame(future_tasks)[["date", "item_name", "target_qty", "priority"]])
             else:
-                st.info("No upcoming tasks.")
+                st.info("No upcoming tasks")
 
-        # --- TAB: HISTORY (Admin Only) ---
+        # 4. History (Admin Only)
         if role == "Admin":
             with t_history:
-                st.subheader("📜 All Tasks History")
-                
-                search_query = st.text_input("🔍 Search by Item Name", "")
-                
-                query = {}
-                if search_query:
-                    query["item_name"] = {"$regex": search_query, "$options": "i"}
-                
-                # Pagination
-                page_size = 10
-                total_docs = tasks_collection.count_documents(query)
-                total_pages = max(1, (total_docs + page_size - 1) // page_size)
-                
-                page_num = st.number_input("Page", min_value=1, max_value=total_pages, step=1)
-                skip_count = (page_num - 1) * page_size
-                
-                history_cursor = tasks_collection.find(query).sort("date", -1).skip(skip_count).limit(page_size)
-                history_data = list(history_cursor)
-                
-                if history_data:
-                    df_hist = pd.DataFrame(history_data)
-                    df_hist['_id'] = df_hist['_id'].astype(str)
-                    st.dataframe(
-                        df_hist[['date', 'item_name', 'target_qty', 'ready_qty', 'status']], 
-                        use_container_width=True
-                    )
-                else:
-                    st.info("No records found.")
+                st.subheader("History")
+                st.dataframe(pd.DataFrame(list(tasks_collection.find().limit(50))))
 
     elif selection == "Store":
         st.title("🏪 Store Inventory")
-        st.write("Live Stock Tracking")
+        st.write("Inventory Logic Here")
 
     elif selection == "Ecommerce":
         st.title("🛒 Ecommerce Analytics")
-        st.write("Sales Data")
+        st.write("Analytics Here")
     
     elif selection == "User Mgmt":
         st.title("👥 User Management")
-        st.write("Admin panel to add/remove users.")
-        
-        # Simple User List for Admin
-        if st.checkbox("Show All Users"):
-            users = list(users_collection.find({}, {"_id": 0, "password": 0}))
-            st.dataframe(users)
+        st.dataframe(pd.DataFrame(list(users_collection.find({}, {"_id":0, "password":0}))))
 
-# --- 6. EXECUTION FLOW ---
+# --- 7. RUN ---
 if st.session_state['logged_in']:
     main_app()
 else:
